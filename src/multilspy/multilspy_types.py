@@ -281,3 +281,34 @@ class Hover(TypedDict):
     range: NotRequired["Range"]
     """ An optional range inside the text document that is used to
     visualize the hover, e.g. by changing the background color. """
+
+
+class DiagnosticSeverity(IntEnum):
+    """The diagnostic's severity."""
+
+    Error = 1
+    """ Reports an error. """
+    Warning = 2
+    """ Reports a warning. """
+    Information = 3
+    """ Reports an information. """
+    Hint = 4
+    """ Reports a hint. """
+
+
+class DiagnosticItem(TypedDict):
+    """Represents a diagnostic, such as a compiler error or warning.
+    Diagnostic objects are only valid in the scope of a resource."""
+
+    range: Range
+    """ The range at which the message applies """
+    severity: NotRequired[DiagnosticSeverity]
+    """ The diagnostic's severity. Can be omitted. If omitted it is up to the
+    client to interpret diagnostics as error, warning, info or hint. """
+    code: NotRequired[Union[int, str]]
+    """ The diagnostic's code, which usually appear in the user interface. """
+    source: NotRequired[str]
+    """ A human-readable string describing the source of this
+    diagnostic, e.g. 'typescript' or 'super lint'. """
+    message: str
+    """ The diagnostic's message. It usually appears in the user interface """
