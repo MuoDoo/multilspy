@@ -145,9 +145,9 @@ class Foo
             with lsp.open_file("error_file.py"):
                 # Wait a bit for the language server to analyze and push diagnostics
                 time.sleep(2.0)
-            
-            # Request diagnostics for the file with syntax errors
-            result = lsp.request_diagnostics("error_file.py")
+                
+                # Request diagnostics for the file with syntax errors (while file is open)
+                result = lsp.request_diagnostics("error_file.py")
 
             # Verify we got diagnostics
             assert isinstance(result, list), f"Expected list, got {type(result)}"
