@@ -181,7 +181,7 @@ class LanguageServer:
         # Key: file URI, Value: list of diagnostics
         self.diagnostics_store: Dict[str, List[multilspy_types.DiagnosticItem]] = {}
 
-    def handle_publish_diagnostics(self, params) -> None:
+    async def handle_publish_diagnostics(self, params) -> None:
         """
         Handler for textDocument/publishDiagnostics notification.
         Stores the diagnostics in diagnostics_store for later retrieval.
@@ -190,6 +190,17 @@ class LanguageServer:
         """
         uri = params.get("uri", "")
         diagnostics = params.get("diagnostics", [])
+        
+        # Normalize URI by resolving symlinks (e.g., /var -> /private/var on macOS)
+        if uri.startswith("file://"):
+            try:
+                from urllib.parse import unquote, urlparse
+                parsed = urlparse(uri)
+                file_path = unquote(parsed.path)
+                resolved_path = os.path.realpath(file_path)
+                uri = pathlib.Path(resolved_path).as_uri()
+            except Exception:
+                pass  # Keep original URI if normalization fails
         
         # Convert to our DiagnosticItem format
         diagnostic_items: List[multilspy_types.DiagnosticItem] = []
@@ -737,7 +748,9 @@ class LanguageServer:
             raise MultilspyException("Language Server not started")
 
         absolute_file_path = str(PurePath(self.repository_root_path, relative_file_path))
-        uri = pathlib.Path(absolute_file_path).as_uri()
+        # Resolve symlinks to match URIs from language server (e.g., /var -> /private/var on macOS)
+        resolved_path = os.path.realpath(absolute_file_path)
+        uri = pathlib.Path(resolved_path).as_uri()
 
         # First, check if we have diagnostics from push-based notifications
         if uri in self.diagnostics_store:
