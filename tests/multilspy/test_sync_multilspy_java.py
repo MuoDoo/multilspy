@@ -87,3 +87,66 @@ def test_multilspy_java_clickhouse_highlevel_sinker() -> None:
                     },
                 },
             ]
+
+def test_multilspy_java_diagnostics() -> None:
+    """
+    Test the request_diagnostics API by creating a Java file with syntax errors
+    """
+    import os
+    import tempfile
+    import time
+    
+    code_language = Language.JAVA
+    
+    # Create a temporary directory with a Java file containing syntax errors
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Create a Java file with syntax errors
+        error_file = os.path.join(temp_dir, "ErrorFile.java")
+        with open(error_file, "w") as f:
+            f.write('''
+// This file has syntax errors for testing diagnostics
+public class ErrorFile {
+    public void brokenMethod( {
+        // Missing closing parenthesis
+        
+        int x = 1 +  // incomplete expression
+        
+        if (true
+            System.out.println("missing parenthesis");
+        
+        String s = "unclosed string
+    }
+}
+''')
+        
+        # Create a minimal config and test
+        from multilspy.multilspy_config import MultilspyConfig
+        from multilspy.multilspy_logger import MultilspyLogger
+        
+        config = MultilspyConfig.from_dict({"code_language": code_language})
+        logger = MultilspyLogger()
+        lsp = SyncLanguageServer.create(config, logger, temp_dir)
+
+        with lsp.start_server():
+            # Open the file to trigger diagnostic push from language server
+            with lsp.open_file("ErrorFile.java"):
+                # Wait for the language server to analyze and push diagnostics
+                # Java LS takes longer to start up
+                time.sleep(5.0)
+                
+                # Request diagnostics for the file with syntax errors (while file is open)
+                result = lsp.request_diagnostics("ErrorFile.java")
+
+            # Verify we got diagnostics
+            assert isinstance(result, list), f"Expected list, got {type(result)}"
+            assert len(result) >= 1, "Expected at least 1 diagnostic for file with syntax errors"
+
+            # Verify diagnostics structure
+            diag = result[0]
+            assert "range" in diag, "Diagnostic should have 'range'"
+            assert "message" in diag, "Diagnostic should have 'message'"
+            assert "start" in diag["range"], "Range should have 'start'"
+            assert "end" in diag["range"], "Range should have 'end'"
+            
+            # Verify it's an error with severity=1 (Error)
+            assert diag.get("severity") == 1, f"Expected severity=1 (Error), got {diag.get('severity')}"
