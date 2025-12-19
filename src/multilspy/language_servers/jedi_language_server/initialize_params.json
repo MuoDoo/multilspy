@@ -548,16 +548,10 @@
             }
         },
         "diagnostics": {
-            "previewRustcOutput": false,
-            "useRustcErrorCode": false,
-            "disabled": [],
             "enable": true,
-            "experimental": {
-                "enable": false
-            },
-            "remapPrefix": {},
-            "warningsAsHint": [],
-            "warningsAsInfo": []
+            "didOpen": true,
+            "didChange": true,
+            "didSave": true
         },
         "discoverProjectCommand": null,
         "showUnlinkedFileNotification": true,

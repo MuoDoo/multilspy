@@ -177,6 +177,37 @@ class LanguageServer:
 
         self.language_id = language_id
         self.open_file_buffers: Dict[str, LSPFileBuffer] = {}
+        # Store diagnostics received from Language Server via textDocument/publishDiagnostics notification
+        # Key: file URI, Value: list of diagnostics
+        self.diagnostics_store: Dict[str, List[multilspy_types.DiagnosticItem]] = {}
+
+    def handle_publish_diagnostics(self, params) -> None:
+        """
+        Handler for textDocument/publishDiagnostics notification.
+        Stores the diagnostics in diagnostics_store for later retrieval.
+        
+        :param params: The PublishDiagnosticsParams from LSP
+        """
+        uri = params.get("uri", "")
+        diagnostics = params.get("diagnostics", [])
+        
+        # Convert to our DiagnosticItem format
+        diagnostic_items: List[multilspy_types.DiagnosticItem] = []
+        for diag in diagnostics:
+            if "range" in diag and "message" in diag:
+                item: multilspy_types.DiagnosticItem = {
+                    "range": diag["range"],
+                    "message": diag["message"],
+                }
+                if "severity" in diag:
+                    item["severity"] = diag["severity"]
+                if "code" in diag:
+                    item["code"] = diag["code"]
+                if "source" in diag:
+                    item["source"] = diag["source"]
+                diagnostic_items.append(item)
+        
+        self.diagnostics_store[uri] = diagnostic_items
 
     @asynccontextmanager
     async def start_server(self) -> AsyncIterator["LanguageServer"]:
@@ -686,6 +717,76 @@ class LanguageServer:
 
         return ret
 
+    async def request_diagnostics(self, relative_file_path: str) -> List[multilspy_types.DiagnosticItem]:
+        """
+        Get diagnostics (syntax errors, warnings, etc.) for the given file.
+        
+        This method first checks if diagnostics are available from the Language Server's
+        push-based notifications (textDocument/publishDiagnostics). If not available,
+        it falls back to the pull-based request (textDocument/diagnostic) if supported.
+
+        :param relative_file_path: The relative path of the file to get diagnostics for
+
+        :return List[multilspy_types.DiagnosticItem]: A list of diagnostics for the file
+        """
+        if not self.server_started:
+            self.logger.log(
+                "request_diagnostics called before Language Server started",
+                logging.ERROR,
+            )
+            raise MultilspyException("Language Server not started")
+
+        absolute_file_path = str(PurePath(self.repository_root_path, relative_file_path))
+        uri = pathlib.Path(absolute_file_path).as_uri()
+
+        # First, check if we have diagnostics from push-based notifications
+        if uri in self.diagnostics_store:
+            return self.diagnostics_store[uri]
+
+        # If no push-based diagnostics, try pull-based request (LSP 3.17+)
+        with self.open_file(relative_file_path):
+            try:
+                response = await self.server.send.text_document_diagnostic(
+                    {
+                        "textDocument": {"uri": uri},
+                    }
+                )
+            except Exception as e:
+                # Some language servers may not support the diagnostic request
+                self.logger.log(
+                    f"Language Server does not support textDocument/diagnostic or returned an error: {e}",
+                    logging.WARNING,
+                )
+                # Return any diagnostics that might have been pushed while the file was open
+                return self.diagnostics_store.get(uri, [])
+
+        if response is None:
+            return self.diagnostics_store.get(uri, [])
+
+        ret: List[multilspy_types.DiagnosticItem] = []
+
+        # Handle different response formats based on LSP spec
+        # Response can be RelatedFullDocumentDiagnosticReport or RelatedUnchangedDocumentDiagnosticReport
+        if isinstance(response, dict):
+            # Check for 'items' key (FullDocumentDiagnosticReport format)
+            if "items" in response:
+                for item in response["items"]:
+                    if isinstance(item, dict) and "range" in item and "message" in item:
+                        diagnostic_item: multilspy_types.DiagnosticItem = {
+                            "range": item["range"],
+                            "message": item["message"],
+                        }
+                        if "severity" in item:
+                            diagnostic_item["severity"] = item["severity"]
+                        if "code" in item:
+                            diagnostic_item["code"] = item["code"]
+                        if "source" in item:
+                            diagnostic_item["source"] = item["source"]
+                        ret.append(diagnostic_item)
+
+        return ret
+
+
 @ensure_all_methods_implemented(LanguageServer)
 class SyncLanguageServer:
     """
@@ -698,6 +799,14 @@ class SyncLanguageServer:
         self.loop = None
         self.loop_thread = None
         self.timeout = timeout
+
+    def handle_publish_diagnostics(self, params) -> None:
+        """
+        Wrapper for LanguageServer.handle_publish_diagnostics.
+        Note: This is called automatically by the language server and not meant to be called directly.
+        """
+        return self.language_server.handle_publish_diagnostics(params)
+
 
     @classmethod
     def create(
@@ -868,5 +977,19 @@ class SyncLanguageServer:
         """
         result = asyncio.run_coroutine_threadsafe(
             self.language_server.request_workspace_symbol(query), self.loop
+        ).result(timeout=self.timeout)
+        return result
+
+    def request_diagnostics(self, relative_file_path: str) -> List[multilspy_types.DiagnosticItem]:
+        """
+        Raise a [textDocument/diagnostic](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_diagnostic) request to the Language Server
+        to get diagnostics (syntax errors, warnings, etc.) for the given file. Wait for the response and return the result.
+
+        :param relative_file_path: The relative path of the file to get diagnostics for
+
+        :return List[multilspy_types.DiagnosticItem]: A list of diagnostics for the file
+        """
+        result = asyncio.run_coroutine_threadsafe(
+            self.language_server.request_diagnostics(relative_file_path), self.loop
         ).result(timeout=self.timeout)
         return result
