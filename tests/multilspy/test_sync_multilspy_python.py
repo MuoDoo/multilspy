@@ -101,3 +101,65 @@ def test_multilspy_python_black() -> None:
                     },
                 },
             ]
+
+
+def test_multilspy_python_diagnostics() -> None:
+    """
+    Test the request_diagnostics API by creating a file with syntax errors
+    """
+    import os
+    import tempfile
+    import time
+    
+    code_language = Language.PYTHON
+    
+    # Create a temporary directory with a Python file containing syntax errors
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Create a Python file with syntax errors
+        error_file = os.path.join(temp_dir, "error_file.py")
+        with open(error_file, "w") as f:
+            f.write('''
+# This file has syntax errors for testing diagnostics
+def broken_function(
+    # Missing closing parenthesis and colon
+
+x = 1 +  # incomplete expression
+
+if True
+    print("missing colon")
+
+class Foo
+    pass
+''')
+        
+        # Create a minimal config and test
+        from multilspy.multilspy_config import MultilspyConfig
+        from multilspy.multilspy_logger import MultilspyLogger
+        
+        config = MultilspyConfig.from_dict({"code_language": code_language})
+        logger = MultilspyLogger()
+        lsp = SyncLanguageServer.create(config, logger, temp_dir)
+
+        with lsp.start_server():
+            # Open the file to trigger diagnostic push from language server
+            with lsp.open_file("error_file.py"):
+                # Wait a bit for the language server to analyze and push diagnostics
+                time.sleep(2.0)
+            
+            # Request diagnostics for the file with syntax errors
+            result = lsp.request_diagnostics("error_file.py")
+
+            # Verify we got diagnostics
+            assert isinstance(result, list), f"Expected list, got {type(result)}"
+            assert len(result) >= 1, "Expected at least 1 diagnostic for file with syntax errors"
+
+            # Verify diagnostics structure and content
+            diag = result[0]
+            assert "range" in diag, "Diagnostic should have 'range'"
+            assert "message" in diag, "Diagnostic should have 'message'"
+            assert "start" in diag["range"], "Range should have 'start'"
+            assert "end" in diag["range"], "Range should have 'end'"
+            
+            # Verify it's a syntax error with severity=1 (Error)
+            assert diag.get("severity") == 1, f"Expected severity=1 (Error), got {diag.get('severity')}"
+            assert "SyntaxError" in diag["message"], f"Expected SyntaxError in message, got: {diag['message']}"
