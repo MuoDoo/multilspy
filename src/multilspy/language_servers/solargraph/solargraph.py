@@ -155,7 +155,7 @@ class Solargraph(LanguageServer):
         self.server.on_notification("window/logMessage", window_log_message)
         self.server.on_request("workspace/executeClientCommand", execute_client_command_handler)
         self.server.on_notification("$/progress", do_nothing)
-        self.server.on_notification("textDocument/publishDiagnostics", do_nothing)
+        self.server.on_notification("textDocument/publishDiagnostics", self.handle_publish_diagnostics)
         self.server.on_notification("language/actionableNotification", do_nothing)
 
         async with super().start_server():
