@@ -159,3 +159,30 @@ async def test_multilspy_kotlin_completions() -> None:
             
             assert found_expected, f"Should find expected completions from {expected_completions}, but found: {completion_texts[:5]}"
 
+
+import asyncio
+
+@pytest.mark.asyncio
+async def test_multilspy_kotlin_diagnostics():
+    """
+    Test the diagnostic working of multilspy with kotlin repository
+    """
+    code_language = Language.KOTLIN
+    params = {
+        "code_language": code_language,
+        "repo_url": "https://github.com/fwcd/kotlin-language-server/",
+        "repo_commit": "8418fb560a4013c3e02c942797e9c877affa0a51"
+    }
+    with create_test_context(params) as context:
+        lsp = LanguageServer.create(context.config, context.logger, context.source_directory)
+        async with lsp.start_server():
+            # Introduce a syntax error
+            file_path = "server/src/test/resources/symbols/DocumentSymbols.kt"
+            with lsp.open_file(file_path):
+                lsp.insert_text_at_position(file_path, 10, 0, "this is a syntax error")
+                await asyncio.sleep(10)
+                diagnostics = await lsp.request_diagnostics(file_path)
+                
+                assert len(diagnostics) > 0
+
+

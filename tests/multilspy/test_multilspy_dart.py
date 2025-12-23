@@ -74,3 +74,28 @@ async def test_multilspy_dart_open_nutri_tracker():
                     "name": "build",
                 },
             ]
+
+import asyncio
+
+@pytest.mark.asyncio
+async def test_multilspy_dart_diagnostics():
+    """
+    Test the diagnostic working of multilspy with dart repository
+    """
+    code_language = Language.DART
+    params = {
+        "code_language": code_language,
+        "repo_url": "https://github.com/simonoppowa/OpenNutriTracker/",
+        "repo_commit": "2df39185bdd822dec6a0e521f4c14e3eab6b0805"
+    }
+    with create_test_context(params) as context:
+        lsp = LanguageServer.create(context.config, context.logger, context.source_directory)
+        async with lsp.start_server():
+            file_path = "lib/core/presentation/widgets/copy_or_delete_dialog.dart"
+            with lsp.open_file(file_path):
+                lsp.insert_text_at_position(file_path, 10, 0, "this is a syntax error")
+                await asyncio.sleep(10)
+                
+                diagnostics = await lsp.request_diagnostics(file_path)
+                assert len(diagnostics) > 0
+

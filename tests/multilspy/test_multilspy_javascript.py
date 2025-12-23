@@ -52,3 +52,28 @@ async def test_multilspy_javascript_exceljs():
                 {'range': {'start': {'line': 180, 'character': 16}, 'end': {'line': 180, 'character': 21}}, 'relativePath': path},
                 {'range': {'start': {'line': 185, 'character': 15}, 'end': {'line': 185, 'character': 20}}, 'relativePath': path}
             ]
+
+import asyncio
+
+@pytest.mark.asyncio
+async def test_multilspy_javascript_diagnostics():
+    """
+    Test the diagnostic working of multilspy with javascript repository
+    """
+    code_language = Language.JAVASCRIPT
+    params = {
+        "code_language": code_language,
+        "repo_url": "https://github.com/exceljs/exceljs/",
+        "repo_commit": "ac96f9a61e9799c7776bd940f05c4a51d7200209"
+    }
+    with create_test_context(params) as context:
+        lsp = LanguageServer.create(context.config, context.logger, context.source_directory)
+        async with lsp.start_server():
+            path = str(PurePath("lib/csv/csv.js"))
+            with lsp.open_file(path):
+                lsp.insert_text_at_position(path, 0, 0, "this is a syntax error")
+                await asyncio.sleep(5)
+                
+                diagnostics = await lsp.request_diagnostics(path)
+                assert len(diagnostics) > 0
+

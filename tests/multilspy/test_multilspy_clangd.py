@@ -68,3 +68,28 @@ async def test_multilspy_clang():
             # get document symbols for binary.cpp
             result = await lsp.request_document_symbols(str(PurePath("src/binary.cpp")))
             assert isinstance(result, tuple)
+
+import asyncio
+
+@pytest.mark.asyncio
+async def test_multilspy_clangd_diagnostics():
+    """
+    Test the diagnostic working of multilspy with cpp repository
+    """
+    code_language = Language.CPP
+    params = {
+        "code_language": code_language,
+        "repo_url": "https://github.com/jbeder/yaml-cpp/",
+        "repo_commit": "39f737443b05e4135e697cb91c2b7b18095acd53"
+    }
+    with create_test_context(params) as context:
+        create_compile_commands_file(context.source_directory)
+        lsp = LanguageServer.create(context.config, context.logger, context.source_directory)
+        async with lsp.start_server():
+            file_path = "src/node_data.cpp"
+            with lsp.open_file(file_path):
+                lsp.insert_text_at_position(file_path, 0, 0, "this is a syntax error")
+                await asyncio.sleep(2)
+                
+                diagnostics = await lsp.request_diagnostics(file_path)
+                assert len(diagnostics) > 0

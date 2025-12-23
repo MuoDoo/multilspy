@@ -142,3 +142,28 @@ async def test_multilspy_csharp_ryujinx():
                 completions = await lsp.request_completions(completions_filepath, 226, 79, allow_incomplete=True)
                 completions = [completion["completionText"] for completion in completions if completion["kind"] != CompletionItemKind.Keyword]
                 assert set(completions) == set(['NotSign', 'ParityOdd', 'NotOverflow', 'Less', 'AboveOrEqual', 'LessOrEqual', 'Overflow', 'Greater', 'ParityEven', 'Sign', 'BelowOrEqual', 'Equal', 'GreaterOrEqual', 'Below', 'Above', 'NotEqual'])
+
+import asyncio
+
+@pytest.mark.asyncio
+async def test_multilspy_csharp_diagnostics():
+    """
+    Test the diagnostic working of multilspy with csharp repository
+    """
+    code_language = Language.CSHARP
+    params = {
+        "code_language": code_language,
+        "repo_url": "https://github.com/dotnet/docfx/",
+        "repo_commit": "3e660da51d5d5145581da4f6154a97f543e84dab"
+    }
+    with create_test_context(params) as context:
+        lsp = LanguageServer.create(context.config, context.logger, context.source_directory)
+        async with lsp.start_server():
+            file_path = "src/Docfx/Program.cs"
+            with lsp.open_file(file_path):
+                lsp.insert_text_at_position(file_path, 10, 0, "this is a syntax error")
+                await asyncio.sleep(10)
+                
+                diagnostics = await lsp.request_diagnostics(file_path)
+                assert len(diagnostics) > 0
+

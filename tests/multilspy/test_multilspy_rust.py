@@ -126,3 +126,28 @@ async def test_multilspy_rust_completions_mediaplayer() -> None:
                     item['completionText'] = item['completionText'][:item['completionText'].find('(')]
                 
                 assert set([item['completionText'] for item in response]) == {'reset', 'into', 'try_into', 'prepare'}
+
+import asyncio
+
+@pytest.mark.asyncio
+async def test_multilspy_rust_diagnostics():
+    """
+    Test the diagnostic working of multilspy with rust repository
+    """
+    code_language = Language.RUST
+    params = {
+        "code_language": code_language,
+        "repo_url": "https://github.com/fathyb/carbonyl/",
+        "repo_commit": "ab80a276b1bd1c2c8dcefc8f248415dfc61dc2bf"
+    }
+    with create_test_context(params) as context:
+        lsp = LanguageServer.create(context.config, context.logger, context.source_directory)
+        async with lsp.start_server():
+            file_path = "src/browser/bridge.rs"
+            with lsp.open_file(file_path):
+                lsp.insert_text_at_position(file_path, 0, 0, "this is a syntax error")
+                await asyncio.sleep(5)
+                
+                diagnostics = await lsp.request_diagnostics(file_path)
+                assert len(diagnostics) > 0
+

@@ -96,3 +96,28 @@ async def test_multilspy_golang_example():
             
             # Check if the symbols are in the result
             assert [symbol["name"] for symbol in result[0]] == ["usage", "greeting", "reverseFlag", "main"]
+
+import asyncio
+
+@pytest.mark.asyncio
+async def test_multilspy_go_diagnostics():
+    """
+    Test the diagnostic working of multilspy with go repository
+    """
+    code_language = Language.GO
+    params = {
+        "code_language": code_language,
+        "repo_url": "https://github.com/golang/example/",
+        "repo_commit": "1bcfdd08c5584d89507e37be70af63c72eb8c16f"
+    }
+    with create_test_context(params) as context:
+        lsp = LanguageServer.create(context.config, context.logger, context.source_directory)
+        async with lsp.start_server():
+            file_path = "hello/hello.go"
+            with lsp.open_file(file_path):
+                lsp.insert_text_at_position(file_path, 20, 0, "this is a syntax error")
+                await asyncio.sleep(5)
+                
+                diagnostics = await lsp.request_diagnostics(file_path)
+                assert len(diagnostics) > 0
+

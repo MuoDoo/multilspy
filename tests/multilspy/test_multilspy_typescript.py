@@ -52,3 +52,27 @@ async def test_multilspy_typescript_trpc():
                 {'range': {'start': {'line': 231, 'character': 15}, 'end': {'line': 231, 'character': 21}}, 'relativePath': path}, 
                 {'range': {'start': {'line': 264, 'character': 12}, 'end': {'line': 264, 'character': 18}}, 'relativePath': path}
             ]
+
+import asyncio
+
+@pytest.mark.asyncio
+async def test_multilspy_typescript_diagnostics():
+    """
+    Test the diagnostic working of multilspy with typescript repository
+    """
+    code_language = Language.TYPESCRIPT
+    params = {
+        "code_language": code_language,
+        "repo_url": "https://github.com/trpc/trpc/",
+        "repo_commit": "936db6dd2598337758e29c843ff66984ed54faaf"
+    }
+    with create_test_context(params) as context:
+        lsp = LanguageServer.create(context.config, context.logger, context.source_directory)
+        async with lsp.start_server():
+            file_path = "packages/server/src/core/router.ts"
+            with lsp.open_file(file_path):
+                lsp.insert_text_at_position(file_path, 0, 0, "this is a syntax error")
+                await asyncio.sleep(5)
+                
+                diagnostics = await lsp.request_diagnostics(file_path)
+                assert len(diagnostics) > 0
