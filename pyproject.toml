@@ -34,6 +34,16 @@ dependencies = [
   "psutil (>=7.0.0,<8.0.0)"
 ]
 
+[project.optional-dependencies]
+server = [
+  "fastapi>=0.100.0",
+  "uvicorn>=0.22.0",
+]
+
+[project.scripts]
+multilspy-server = "multilspy.server:main"
+multilspy-download = "multilspy.download:main"
+
 [project.urls]
 "Homepage" = "https://github.com/microsoft/multilspy"
 "Bug Tracker" = "https://github.com/microsoft/multilspy/issues"
