@@ -77,7 +77,12 @@ async def test_multilspy_dart_open_nutri_tracker():
 
 import asyncio
 
+import shutil
+
+NO_DART = shutil.which("dart") is None
+
 @pytest.mark.asyncio
+@pytest.mark.skipif(NO_DART, reason="dart not found")
 async def test_multilspy_dart_diagnostics():
     """
     Test the diagnostic working of multilspy with dart repository
@@ -89,13 +94,19 @@ async def test_multilspy_dart_diagnostics():
         "repo_commit": "2df39185bdd822dec6a0e521f4c14e3eab6b0805"
     }
     with create_test_context(params) as context:
+        import subprocess
+        subprocess.run(["dart", "pub", "get"], cwd=context.source_directory, check=False)
+
         lsp = LanguageServer.create(context.config, context.logger, context.source_directory)
         async with lsp.start_server():
             file_path = "lib/core/presentation/widgets/copy_or_delete_dialog.dart"
             with lsp.open_file(file_path):
+                # Clear any diagnostics received during file open to ensure we wait for the update triggered by our change
+                lsp.diagnostics_received.clear()
                 lsp.insert_text_at_position(file_path, 10, 0, "this is a syntax error")
-                await asyncio.sleep(10)
                 
+                # Poll for diagnostics
+                await lsp.await_diagnostics(timeout=60)
                 diagnostics = await lsp.request_diagnostics(file_path)
                 assert len(diagnostics) > 0
 

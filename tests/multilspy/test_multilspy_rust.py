@@ -145,9 +145,11 @@ async def test_multilspy_rust_diagnostics():
         async with lsp.start_server():
             file_path = "src/browser/bridge.rs"
             with lsp.open_file(file_path):
+                # Clear any diagnostics received during file open to ensure we wait for the update triggered by our change
+                lsp.diagnostics_received.clear()
                 lsp.insert_text_at_position(file_path, 0, 0, "this is a syntax error")
-                await asyncio.sleep(5)
                 
+                await lsp.await_diagnostics(timeout=30)
                 diagnostics = await lsp.request_diagnostics(file_path)
+                
                 assert len(diagnostics) > 0
-

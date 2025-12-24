@@ -156,6 +156,19 @@ class LanguageServer:
         self.server_started = False
         self.repository_root_path: str = repository_root_path
         self.completions_available = asyncio.Event()
+        self.diagnostics_received = asyncio.Event()
+
+    async def await_diagnostics(self, timeout: int = 60) -> None:
+        """
+        Wait until diagnostics are received from the Language Server.
+
+        :param timeout: Maximum time to wait in seconds
+        """
+        try:
+            await asyncio.wait_for(self.diagnostics_received.wait(), timeout=timeout)
+            self.diagnostics_received.clear()
+        except asyncio.TimeoutError:
+            pass  # Caller will check if diagnostics are actually present, or let subsequent assertions fail
 
         if config.trace_lsp_communication:
 
@@ -219,6 +232,7 @@ class LanguageServer:
                 diagnostic_items.append(item)
         
         self.diagnostics_store[uri] = diagnostic_items
+        self.diagnostics_received.set()
 
     @asynccontextmanager
     async def start_server(self) -> AsyncIterator["LanguageServer"]:

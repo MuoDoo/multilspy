@@ -162,7 +162,12 @@ async def test_multilspy_kotlin_completions() -> None:
 
 import asyncio
 
+import shutil
+
+NO_GRADLE = shutil.which("gradle") is None
+
 @pytest.mark.asyncio
+@pytest.mark.skipif(NO_GRADLE, reason="gradle not found")
 async def test_multilspy_kotlin_diagnostics():
     """
     Test the diagnostic working of multilspy with kotlin repository
@@ -179,10 +184,12 @@ async def test_multilspy_kotlin_diagnostics():
             # Introduce a syntax error
             file_path = "server/src/test/resources/symbols/DocumentSymbols.kt"
             with lsp.open_file(file_path):
-                lsp.insert_text_at_position(file_path, 10, 0, "this is a syntax error")
-                await asyncio.sleep(10)
+                # Clear any diagnostics received during file open to ensure we wait for the update triggered by our change
+                lsp.diagnostics_received.clear()
+                lsp.insert_text_at_position(file_path, 2, 0, "this is a syntax error")
+                # Poll for diagnostics
+                await lsp.await_diagnostics(timeout=60)
                 diagnostics = await lsp.request_diagnostics(file_path)
-                
                 assert len(diagnostics) > 0
 
 
